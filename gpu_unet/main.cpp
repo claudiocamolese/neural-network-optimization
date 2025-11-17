@@ -329,7 +329,7 @@ static void bench_mnist(int iterations) {
 
 static void test_unet(int iterations) {
 	int batch_size = 2;
-	float learning_rate = 1e-3;
+	float learning_rate = 1e-6;
 	
 	ConvReLU conv_0_1(1, 2, 3);
 	ConvReLU conv_0_2(2, 4, 3);
