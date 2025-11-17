@@ -276,7 +276,7 @@ static void bench_mini_unet(int iterations) {
 
 static void bench_mnist(int iterations) {
 	int batch_size = 15;
-	float learning_rate = 0.001;
+	float learning_rate = 1e-6;
 
 	/* 32x32 */
 	ConvReLU conv1(1, 16, 3);
