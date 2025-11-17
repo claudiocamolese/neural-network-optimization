@@ -132,7 +132,7 @@ static void bench_conv(int iterations) {
 
 static void bench_mini_unet(int iterations) {
 	int batch_size = 1;
-	float learning_rate = 1e-6,
+	float learning_rate = 1e-4,
 	      elapsed,
 	      elapsed_conv_forward = 0.,
 	      elapsed_conv_backward = 0.,
@@ -276,7 +276,7 @@ static void bench_mini_unet(int iterations) {
 
 static void bench_mnist(int iterations) {
 	int batch_size = 15;
-	float learning_rate = 1e-6;
+	float learning_rate = 1e-4;
 
 	/* 32x32 */
 	ConvReLU conv1(1, 16, 3);
@@ -329,7 +329,7 @@ static void bench_mnist(int iterations) {
 
 static void test_unet(int iterations) {
 	int batch_size = 2;
-	float learning_rate = 1e-6;
+	float learning_rate = 1e-4;
 	
 	ConvReLU conv_0_1(1, 2, 3);
 	ConvReLU conv_0_2(2, 4, 3);
