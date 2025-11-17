@@ -390,7 +390,7 @@ static void test_unet(int iterations) {
 
 	MembraneLoader dataloader("../data/cell-membranes/", batch_size);
 
-	conv_0_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
+	/*conv_0_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
 		std::make_tuple(conv_0_1.output_channels, conv_0_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
 	conv_0_2.optimizer = new Adam(learning_rate, 0.9, 0.999, 
 		std::make_tuple(conv_0_2.output_channels, conv_0_2.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
@@ -410,7 +410,17 @@ static void test_unet(int iterations) {
 		std::make_tuple(conv_6_1.output_channels, conv_6_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
 	conv_6_2.optimizer = new Adam(learning_rate, 0.9, 0.999, 
 		std::make_tuple(conv_6_2.output_channels, conv_6_2.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-
+	*/
+	conv_0_1.optimizer = new Sgd(learning_rate)
+	conv_0_2.optimizer = new Sgd(learning_rate)
+	conv_1_1.optimizer = new Sgd(learning_rate)
+	conv_2_1.optimizer = new Sgd(learning_rate)
+	conv_3_1.optimizer = new Sgd(learning_rate)
+	conv_3_2.optimizer = new Sgd(learning_rate)
+	conv_4_1.optimizer = new Sgd(learning_rate)
+	conv_5_1.optimizer = new Sgd(learning_rate)
+	conv_6_1.optimizer = new Sgd(learning_rate)
+	conv_6_2.optimizer = new Sgd(learning_rate)
 
 	for (int iter = 0; iter < iterations; iter++) {
 		auto data = dataloader.loadBatch();
