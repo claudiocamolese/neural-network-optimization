@@ -65,19 +65,23 @@ static std::pair<Tensor<float, 4>, Tensor<float, 4>> testInput(int batch_size, i
 }
 
 static void bench_conv(int iterations) {
-	float learing_rate = 0.000001;
+	float learning_rate = 1e-6;
 	int batch_size = 5,
 	    image_size = 256;
 
 	ConvReLU conv1(1, 32, 3);
-
 	ConvSoftMax conv2(32, 2);
 
 	PerPixelCELoss loss;
-	conv1.optimizer = new Sgd(learing_rate);
-	conv2.optimizer = new Sgd(learing_rate);
-	uniformRandomInit(-0.001, 0.001, conv1.weights, conv1.bias);
-	uniformRandomInit(-0.001, 0.001, conv2.weights, conv2.bias);
+	
+	conv1.optimizer = new Sgd(learning_rate);
+	conv2.optimizer = new Sgd(learning_rate);
+	
+	// Inizializzazione migliorata
+	float init1 = sqrt(2.0 / (3 * 3 * 1));
+	float init2 = sqrt(2.0 / (1 * 1 * 32));
+	uniformRandomInit(-init1, init1, conv1.weights, conv1.bias);
+	uniformRandomInit(-init2, init2, conv2.weights, conv2.bias);
 
 	float elapsed,
 	      elapsed_time_forward = 0.,
@@ -87,6 +91,7 @@ static void bench_conv(int iterations) {
 	cudaErrchk(cudaEventCreate(&stop));
 
 	auto data = testInput(batch_size, image_size);
+	
 	for (int i = 0; i < iterations; i++) {
 		cudaErrchk(cudaEventRecord(start, 0));
 		auto t1 = conv1.forward(data.first);
@@ -104,7 +109,13 @@ static void bench_conv(int iterations) {
 
 		if (i % 10 == 0) {
 			auto l = loss.forward(pred, data.second);
-			printf("iter. %d:\tloss=%f\n", i, sum(l));
+			float loss_val = sum(l);
+			printf("iter. %d:\tloss=%f\n", i, loss_val);
+			
+			if (std::isnan(loss_val) || std::isinf(loss_val)) {
+				fprintf(stderr, "ERROR: Loss is NaN/Inf at iteration %d!\n", i);
+				break;
+			}
 		}
 
 		auto e1 = loss.backward(pred, data.second);
@@ -132,8 +143,8 @@ static void bench_conv(int iterations) {
 
 static void bench_mini_unet(int iterations) {
 	int batch_size = 1;
-	float learning_rate = 1e-4,
-	      elapsed,
+	float learning_rate = 1e-5;
+	float elapsed,
 	      elapsed_conv_forward = 0.,
 	      elapsed_conv_backward = 0.,
 	      elapsed_down_forward = 0.,
@@ -175,17 +186,25 @@ static void bench_mini_unet(int iterations) {
 	ConvSoftMax conv5(80 + 20, 2);
 
 	PerPixelCELoss loss;
-	float init = 0.01;
+	
+	// Inizializzazione He per ReLU
+	float init1 = sqrt(2.0 / (3 * 3 * 1));
+	float init2 = sqrt(2.0 / (3 * 3 * 20));
+	float init3 = sqrt(2.0 / (3 * 3 * 40));
+	float init4 = sqrt(2.0 / (3 * 3 * 120));
+	float init5 = sqrt(2.0 / (1 * 1 * 100));
+	
 	conv1.optimizer = new Sgd(learning_rate);
 	conv2.optimizer = new Sgd(learning_rate);
 	conv3.optimizer = new Sgd(learning_rate);
 	conv4.optimizer = new Sgd(learning_rate);
 	conv5.optimizer = new Sgd(learning_rate);
-	uniformRandomInit(-init, init, conv1.weights, conv1.bias);
-	uniformRandomInit(-init, init, conv2.weights, conv2.bias);
-	uniformRandomInit(-init, init, conv3.weights, conv3.bias);
-	uniformRandomInit(-init, init, conv4.weights, conv4.bias);
-	uniformRandomInit(-init, init, conv5.weights, conv5.bias);
+	
+	uniformRandomInit(-init1, init1, conv1.weights, conv1.bias);
+	uniformRandomInit(-init2, init2, conv2.weights, conv2.bias);
+	uniformRandomInit(-init3, init3, conv3.weights, conv3.bias);
+	uniformRandomInit(-init4, init4, conv4.weights, conv4.bias);
+	uniformRandomInit(-init5, init5, conv5.weights, conv5.bias);
 
 	for (int iter = 0; iter < iterations; iter++) {
 		auto data = dataloader.loadBatch();
@@ -224,7 +243,13 @@ static void bench_mini_unet(int iterations) {
 
 		if (iter % 10 == 0) {
 			auto l = loss.forward(forward_conv5, data.second);
-			printf("iter. %d:\tloss=%f\n", iter, sum(l));
+			float loss_val = sum(l);
+			printf("iter. %d:\tloss=%f\n", iter, loss_val);
+			
+			if (std::isnan(loss_val) || std::isinf(loss_val)) {
+				fprintf(stderr, "ERROR: Loss is NaN/Inf at iteration %d!\n", iter);
+				break;
+			}
 		}
 
 		auto backward_loss = loss.backward(forward_conv5, data.second);
@@ -259,8 +284,6 @@ static void bench_mini_unet(int iterations) {
 		time_start();
 		auto backward_conv1 = conv1.backward(backward_down1);
 		time_end(elapsed_conv_backward);
-
-		// waitForWeightsStream();
 	}
 
 	cudaErrchk(cudaDeviceSynchronize());
@@ -276,7 +299,7 @@ static void bench_mini_unet(int iterations) {
 
 static void bench_mnist(int iterations) {
 	int batch_size = 15;
-	float learning_rate = 1e-4;
+	float learning_rate = 1e-5;
 
 	/* 32x32 */
 	ConvReLU conv1(1, 16, 3);
@@ -294,17 +317,24 @@ static void bench_mnist(int iterations) {
 	ConvSoftMax conv4(64, 10);
 
 	PerPixelCELoss loss;
+	
 	conv1.optimizer = new Sgd(learning_rate);
 	conv2.optimizer = new Sgd(learning_rate);
 	conv3.optimizer = new Sgd(learning_rate);
 	conv4.optimizer = new Sgd(learning_rate);
-	uniformRandomInit(-0.05, 0.05, conv1.weights, conv1.bias);
-	uniformRandomInit(-0.05, 0.05, conv2.weights, conv2.bias);
-	uniformRandomInit(-0.05, 0.05, conv3.weights, conv3.bias);
-	uniformRandomInit(-0.05, 0.05, conv4.weights, conv4.bias);
+	
+	// Inizializzazione He
+	float init1 = sqrt(2.0 / (3 * 3 * 1));
+	float init2 = sqrt(2.0 / (3 * 3 * 16));
+	float init3 = sqrt(2.0 / (3 * 3 * 32));
+	float init4 = sqrt(2.0 / (1 * 1 * 64));
+	uniformRandomInit(-init1, init1, conv1.weights, conv1.bias);
+	uniformRandomInit(-init2, init2, conv2.weights, conv2.bias);
+	uniformRandomInit(-init3, init3, conv3.weights, conv3.bias);
+	uniformRandomInit(-init4, init4, conv4.weights, conv4.bias);
 
 	MNISTLoader mnist("../data/mnist/mnist-train.txt", batch_size);
-	// auto data = mnist.loadBatch();
+	
 	for (int iter = 0; iter < iterations; iter++) {
 		auto data = mnist.loadBatch();
 
@@ -315,8 +345,13 @@ static void bench_mnist(int iterations) {
 
 		if (iter % 20 == 0) {
 			float l = sum(loss.forward(pred, data.second));
-			printf("iter. %d:\tloss=%f, correct_digits=%.1f%%\n", iter, l, mnist.checkAccuracy(pred, data.second));
-			// pred.dump4D(stdout, "prediction");
+			float acc = mnist.checkAccuracy(pred, data.second);
+			printf("iter. %d:\tloss=%f, correct_digits=%.1f%%\n", iter, l, acc);
+			
+			if (std::isnan(l) || std::isinf(l)) {
+				fprintf(stderr, "ERROR: Loss is NaN/Inf at iteration %d!\n", iter);
+				break;
+			}
 		}
 
 		auto e = loss.backward(pred, data.second);
@@ -329,12 +364,11 @@ static void bench_mnist(int iterations) {
 
 static void test_unet(int iterations) {
 	int batch_size = 2;
-	float learning_rate = 1e-4;
+	float learning_rate = 1e-5;
 	
 	ConvReLU conv_0_1(1, 2, 3);
 	ConvReLU conv_0_2(2, 4, 3);
 	MaxPool pool_0(2);
-
 
 	ConvReLU conv_1_1(4, 8, 3);
 	MaxPool pool_1(2);
@@ -355,27 +389,36 @@ static void test_unet(int iterations) {
 	Upsample upsample_5(2);
 
 	ConvReLU conv_6_1(8 + 4, 4, 3);
-
 	ConvSoftMax conv_6_2(4, 2);
 
 	PerPixelCELoss loss;
 
-
 	if (access("./weights/unet/conv-0-1.weights", F_OK) != 0) {
-		float init = 0.01;
-		printf("Initializing weights from %f to %f...\n", -init, init);
-		uniformRandomInit(-init, init, conv_0_1.weights, conv_0_1.bias);
-		uniformRandomInit(-init, init, conv_0_2.weights, conv_0_2.bias);
-		uniformRandomInit(-init, init, conv_1_1.weights, conv_1_1.bias);
-		uniformRandomInit(-init, init, conv_2_1.weights, conv_2_1.bias);
-		uniformRandomInit(-init, init, conv_3_1.weights, conv_3_1.bias);
-		uniformRandomInit(-init, init, conv_3_2.weights, conv_3_2.bias);
-		uniformRandomInit(-init, init, conv_4_1.weights, conv_4_1.bias);
-		uniformRandomInit(-init, init, conv_5_1.weights, conv_5_1.bias);
-		uniformRandomInit(-init, init, conv_6_1.weights, conv_6_1.bias);
-		uniformRandomInit(-init, init, conv_6_2.weights, conv_6_2.bias);
+		// Inizializzazione He migliorata
+		float init_0_1 = sqrt(2.0 / (3 * 3 * 1));
+		float init_0_2 = sqrt(2.0 / (3 * 3 * 2));
+		float init_1_1 = sqrt(2.0 / (3 * 3 * 4));
+		float init_2_1 = sqrt(2.0 / (3 * 3 * 8));
+		float init_3_1 = sqrt(2.0 / (3 * 3 * 16));
+		float init_3_2 = sqrt(2.0 / (3 * 3 * 16));
+		float init_4_1 = sqrt(2.0 / (3 * 3 * 24));
+		float init_5_1 = sqrt(2.0 / (3 * 3 * 16));
+		float init_6_1 = sqrt(2.0 / (3 * 3 * 12));
+		float init_6_2 = sqrt(2.0 / (1 * 1 * 4));
+		
+		printf("Inizializzazione pesi con He initialization...\n");
+		uniformRandomInit(-init_0_1, init_0_1, conv_0_1.weights, conv_0_1.bias);
+		uniformRandomInit(-init_0_2, init_0_2, conv_0_2.weights, conv_0_2.bias);
+		uniformRandomInit(-init_1_1, init_1_1, conv_1_1.weights, conv_1_1.bias);
+		uniformRandomInit(-init_2_1, init_2_1, conv_2_1.weights, conv_2_1.bias);
+		uniformRandomInit(-init_3_1, init_3_1, conv_3_1.weights, conv_3_1.bias);
+		uniformRandomInit(-init_3_2, init_3_2, conv_3_2.weights, conv_3_2.bias);
+		uniformRandomInit(-init_4_1, init_4_1, conv_4_1.weights, conv_4_1.bias);
+		uniformRandomInit(-init_5_1, init_5_1, conv_5_1.weights, conv_5_1.bias);
+		uniformRandomInit(-init_6_1, init_6_1, conv_6_1.weights, conv_6_1.bias);
+		uniformRandomInit(-init_6_2, init_6_2, conv_6_2.weights, conv_6_2.bias);
 	} else {
-		printf("Reading weights...\n");
+		printf("Caricamento pesi da file...\n");
 		readFromFile("./weights/unet/conv-0-1.weights", conv_0_1.weights, conv_0_1.bias);
 		readFromFile("./weights/unet/conv-0-2.weights", conv_0_2.weights, conv_0_2.bias);
 		readFromFile("./weights/unet/conv-1-1.weights", conv_1_1.weights, conv_1_1.bias);
@@ -390,27 +433,6 @@ static void test_unet(int iterations) {
 
 	MembraneLoader dataloader("../data/cell-membranes/", batch_size);
 
-	/*conv_0_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_0_1.output_channels, conv_0_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_0_2.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_0_2.output_channels, conv_0_2.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_1_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_1_1.output_channels, conv_1_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_2_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_2_1.output_channels, conv_2_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_3_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_3_1.output_channels, conv_3_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_3_2.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_3_2.output_channels, conv_3_2.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_4_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_4_1.output_channels, conv_4_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_5_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_5_1.output_channels, conv_5_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_6_1.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_6_1.output_channels, conv_6_1.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	conv_6_2.optimizer = new Adam(learning_rate, 0.9, 0.999, 
-		std::make_tuple(conv_6_2.output_channels, conv_6_2.input_channels, dataloader.IMAGE_WIDTH, dataloader.IMAGE_HEIGHT));
-	*/
 	conv_0_1.optimizer = new Sgd(learning_rate);
 	conv_0_2.optimizer = new Sgd(learning_rate);
 	conv_1_1.optimizer = new Sgd(learning_rate);
@@ -422,11 +444,13 @@ static void test_unet(int iterations) {
 	conv_6_1.optimizer = new Sgd(learning_rate);
 	conv_6_2.optimizer = new Sgd(learning_rate);
 
+	float best_loss = 1e9;
+	int no_improvement_count = 0;
+	
 	for (int iter = 0; iter < iterations; iter++) {
 		auto data = dataloader.loadBatch();
 
 		/***			Forward				***/
-
 		auto t0 = conv_0_2.forward(conv_0_1.forward(data.first));
 		auto t1 = conv_1_1.forward(pool_0.forward(t0));
 		auto t2 = conv_2_1.forward(drop_0.forward(pool_1.forward(t1)));
@@ -438,11 +462,9 @@ static void test_unet(int iterations) {
 		auto t6in = concat(upsample_5.forward(t5), t0);
 		auto pred = conv_6_2.forward(conv_6_1.forward(t6in));
 
-		auto l = sum(loss.forward(pred, data.second));
-
+		float l = sum(loss.forward(pred, data.second));
 
 		/***			Backward			***/
-
 		auto e6 = conv_6_1.backward(conv_6_2.backward(loss.backward(pred, data.second)));
 		auto e6split = split(e6, t5.dim(1));
 		auto e5 = conv_5_1.backward(upsample_5.backward(e6split.first));
@@ -454,15 +476,50 @@ static void test_unet(int iterations) {
 		auto e1 = conv_1_1.backward(pool_1.backward(drop_0.backward(e2)) + e5split.second);
 		auto e0 = conv_0_1.backward(conv_0_2.backward(pool_0.backward(e1) + e6split.second));
 
-
-		/***		Print Measures			***/
-
-		printf("iter. %d:\tloss=%f\n", iter, l);
-		if (iter % 10 == 0)
-			printf("iter. %d:\tcorrect_pixels=%.2f\n", iter, dataloader.checkAccuracy(pred, data.second));
+		/***		Stampa Metriche			***/
+		printf("iter. %d:\tloss=%.2f", iter, l);
+		
+		if (iter % 10 == 0) {
+			float acc = dataloader.checkAccuracy(pred, data.second);
+			printf("\tcorrect_pixels=%.2f%%", acc);
+		}
+		printf("\n");
+		
+		// Controllo NaN/Inf
+		if (std::isnan(l) || std::isinf(l)) {
+			fprintf(stderr, "ERRORE: Loss è NaN/Inf all'iterazione %d!\n", iter);
+			fprintf(stderr, "Training interrotto.\n");
+			break;
+		}
+		
+		// Early stopping semplice
+		if (l < best_loss) {
+			best_loss = l;
+			no_improvement_count = 0;
+		} else {
+			no_improvement_count++;
+		}
+		
+		// Learning rate decay ogni 200 iterazioni
+		if (iter > 0 && iter % 200 == 0) {
+			learning_rate *= 0.95;
+			printf("Learning rate ridotto a: %.6f\n", learning_rate);
+			
+			// Aggiorna tutti gli optimizer
+			delete conv_0_1.optimizer; conv_0_1.optimizer = new Sgd(learning_rate);
+			delete conv_0_2.optimizer; conv_0_2.optimizer = new Sgd(learning_rate);
+			delete conv_1_1.optimizer; conv_1_1.optimizer = new Sgd(learning_rate);
+			delete conv_2_1.optimizer; conv_2_1.optimizer = new Sgd(learning_rate);
+			delete conv_3_1.optimizer; conv_3_1.optimizer = new Sgd(learning_rate);
+			delete conv_3_2.optimizer; conv_3_2.optimizer = new Sgd(learning_rate);
+			delete conv_4_1.optimizer; conv_4_1.optimizer = new Sgd(learning_rate);
+			delete conv_5_1.optimizer; conv_5_1.optimizer = new Sgd(learning_rate);
+			delete conv_6_1.optimizer; conv_6_1.optimizer = new Sgd(learning_rate);
+			delete conv_6_2.optimizer; conv_6_2.optimizer = new Sgd(learning_rate);
+		}
 	}
 
-	printf("Done! (Saving weights...)\n");
+	printf("Training completato! (Salvataggio pesi...)\n");
 	writeToFile("./weights/unet/conv-0-1.weights", conv_0_1.weights, conv_0_1.bias);
 	writeToFile("./weights/unet/conv-0-2.weights", conv_0_2.weights, conv_0_2.bias);
 	writeToFile("./weights/unet/conv-1-1.weights", conv_1_1.weights, conv_1_1.bias);
@@ -473,22 +530,25 @@ static void test_unet(int iterations) {
 	writeToFile("./weights/unet/conv-5-1.weights", conv_5_1.weights, conv_5_1.bias);
 	writeToFile("./weights/unet/conv-6-1.weights", conv_6_1.weights, conv_6_1.bias);
 	writeToFile("./weights/unet/conv-6-2.weights", conv_6_2.weights, conv_6_2.bias);
+	printf("Pesi salvati con successo!\n");
 }
 
 int main(int argc, const char *argv[]) {
 	cudaErrchk(cudaDeviceSynchronize());
-	printf("Device synchronized!\n");
+	printf("Dispositivo CUDA sincronizzato!\n");
+	
 	if (argc == 1) {
 		bench_mini_unet(1);
 		return EXIT_SUCCESS;
 	}
 
 	if (argc != 3) {
-		fprintf(stderr, "usage: %s <bench_unet|test_unet|mnist|bench_conv> <iterations>\n", argv[0]);
+		fprintf(stderr, "uso: %s <bench_unet|test_unet|mnist|bench_conv> <iterazioni>\n", argv[0]);
 		return EXIT_FAILURE;
 	}
 
 	int iterations = atoi(argv[2]);
+	
 	if (strcmp(argv[1], "bench_unet") == 0)
 		bench_mini_unet(iterations);
 	else if (strcmp(argv[1], "test_unet") == 0)
@@ -497,9 +557,11 @@ int main(int argc, const char *argv[]) {
 		bench_mnist(iterations);
 	else if (strcmp(argv[1], "bench_conv") == 0)
 		bench_conv(iterations);
-	else
-		fprintf(stderr, "usage: %s <bench_unet|test_unet|mnist|bench_conv> <iterations>\n", argv[0]);
+	else {
+		fprintf(stderr, "Comando non riconosciuto: %s\n", argv[1]);
+		fprintf(stderr, "uso: %s <bench_unet|test_unet|mnist|bench_conv> <iterazioni>\n", argv[0]);
+		return EXIT_FAILURE;
+	}
 
 	return EXIT_SUCCESS;
 }
-
