@@ -362,7 +362,7 @@ static void test_unet(int iterations) {
 
 
 	if (access("./weights/unet/conv-0-1.weights", F_OK) != 0) {
-		float init = 0.5;
+		float init = 0.01;
 		printf("Initializing weights from %f to %f...\n", -init, init);
 		uniformRandomInit(-init, init, conv_0_1.weights, conv_0_1.bias);
 		uniformRandomInit(-init, init, conv_0_2.weights, conv_0_2.bias);
